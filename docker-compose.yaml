@@ -1,0 +1,84 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13.7-management
+    container_name: "rmq_pubsub-rabbitmq"
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - "/opt/rmq_pubsub/rmq/data:/var/lib/rabbitmq/"
+
+  cassandra:
+    image: cassandra:5.0.3
+    container_name: "rmq_pubsub-cassandra"
+    ports:
+      - "127.0.0.1:7000:7000"
+      - "127.0.0.1:9042:9042"
+    volumes:
+      - "/opt/rmq_pubsub/cassandra/data"
+    environment:
+      CQLVERSION: "3.4.6"
+    restart:
+      unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "nodetool status" ]
+      interval: 2m
+      start_period: 2m
+      timeout: 10s
+      retries: 3
+
+  cassandra_migrations:
+    image: cassandra:5.0.3
+    container_name: "rmq_pubsub-cassandra_migrations"
+    volumes:
+      - "/opt/rmq_pubsub/cassandra/data"
+      - "./migrations/01.cql:/scripts/data.cql"
+    environment:
+      CQLSH_HOST: "cassandra"
+    restart:
+      on-failure
+    command: "cqlsh -f /scripts/data.cql"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  publisher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: "rmq_pubsub-publisher"
+    env_file:
+      - configs/publisher.env
+    command: "uv run python publisher/publisher.py"
+    depends_on:
+      - rabbitmq
+      - cassandra
+      - cassandra_migrations
+
+  subscriber1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: "rmq_pubsub-subscriber1"
+    env_file:
+      - configs/subscriber1.env
+    command: "uv run python subscriber/subscriber.py"
+    restart: on-failure
+    depends_on:
+      - rabbitmq
+      - cassandra
+      - cassandra_migrations
+
+  subscriber2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: "rmq_pubsub-subscriber2"
+    env_file:
+      - configs/subscriber2.env
+    command: "uv run python subscriber/subscriber.py"
+    restart: on-failure
+    depends_on:
+      - rabbitmq
+      - cassandra
+      - cassandra_migrations
