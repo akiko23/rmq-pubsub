@@ -15,7 +15,7 @@ services:
       - "127.0.0.1:7000:7000"
       - "127.0.0.1:9042:9042"
     volumes:
-      - "/opt/rmq_pubsub/cassandra/data"
+      - "/opt/rmq_pubsub/cassandra:/var/lib/cassandra/"
     environment:
       CQLVERSION: "3.4.6"
     restart:
